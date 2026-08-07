@@ -1,0 +1,181 @@
+#!/bin/bash
+set -e
+
+SERVICE_NAME="alxw"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+ALX_BIN="/usr/bin/alx"
+ALXWEB_PY="/etc/alxweb.py"
+ALX_DOWNLOAD_URL="https://github.com/Xuepoo/agent-lx-music/releases/download/v0.3.4/alx-linux-aarch64"
+ALXWEB_PY_URL="https://github.com/simon-lite/lxmusic-headless/raw/refs/heads/main/alxweb.py"
+
+function check_root {
+    if [[ $EUID -ne 0 ]]; then
+        echo "❌ 必须使用 root/sudo 执行本脚本"
+        exit 1
+    fi
+}
+
+function install_func {
+    check_root
+    echo "===== 开始安装 alxweb 环境 ====="
+
+    apt update -qq
+
+    # 安装 python3
+    if ! command -v python3 &>/dev/null; then
+        echo "🔧 未检测到 python3，正在安装..."
+        apt install -y python3
+    else
+        echo "✅ python3 已存在"
+    fi
+
+    # 安装 python3‑flask
+    if ! dpkg -l python3-flask &>/dev/null; then
+        echo "🔧 安装 python3‑flask ..."
+        apt install -y python3-flask
+    else
+        echo "✅ python3‑flask 已存在"
+    fi
+
+    # 安装 mpv
+    if ! command -v mpv &>/dev/null; then
+        echo "🔧 未检测到 mpv，正在安装..."
+        apt install -y mpv --no-install-recommends
+    else
+        echo "✅ mpv 已存在"
+    fi
+
+    # 下载 alx
+    if [[ ! -f "${ALX_BIN}" ]]; then
+        echo "🔧 下载 alx-linux-aarch64 -> ${ALX_BIN}"
+        curl -L -o "${ALX_BIN}" "${ALX_DOWNLOAD_URL}"
+        chmod +x "${ALX_BIN}"
+    else
+        echo "✅ ${ALX_BIN} 已存在"
+    fi
+
+    # 校验 alx --help
+    echo "🔍 校验 alx --help"
+    if ! ${ALX_BIN} --help &>/dev/null; then
+        echo "❌ alx --help 执行失败，请检查系统架构、文件完整性"
+        exit 1
+    fi
+    echo "✅ alx 校验通过"
+
+    # 下载 alxweb.py
+    echo "🔧 下载 alxweb.py -> ${ALXWEB_PY}"
+    curl -L -o "${ALXWEB_PY}" "${ALXWEB_PY_URL}"
+    chmod +x "${ALXWEB_PY}"
+
+    # 生成 systemd service
+    echo "🔧 创建 systemd 服务 ${SERVICE_FILE}"
+    cat > "${SERVICE_FILE}" <<EOF
+[Unit]
+Description=alxweb lxmusic headless service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 ${ALXWEB_PY}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable "${SERVICE_NAME}"
+    echo "🎉 安装完成！"
+    read -p "按回车返回主菜单..."
+}
+
+function start_func {
+    check_root
+    echo "▶️ 启动 ${SERVICE_NAME}"
+    systemctl start "${SERVICE_NAME}"
+    systemctl status "${SERVICE_NAME}" --no-pager
+    read -p "按回车返回主菜单..."
+}
+
+function stop_func {
+    check_root
+    echo "⏹️ 停止 ${SERVICE_NAME}"
+    # 新增：执行 alx quit，忽略报错，alx不存在也不中断脚本
+    set +e
+    alx quit
+    set -e
+    systemctl stop "${SERVICE_NAME}"
+    echo "已停止服务"
+    read -p "按回车返回主菜单..."
+}
+
+function restart_func {
+    check_root
+    echo "🔄 重启 ${SERVICE_NAME}"
+    systemctl restart "${SERVICE_NAME}"
+    systemctl status "${SERVICE_NAME}" --no-pager
+    read -p "按回车返回主菜单..."
+}
+
+function remove_func {
+    check_root
+    echo "===== 卸载清理 ====="
+    set +e
+    alx quit
+    systemctl stop "${SERVICE_NAME}" 2>/dev/null
+    systemctl disable "${SERVICE_NAME}" 2>/dev/null
+    set -e
+
+    if [[ -f "${SERVICE_FILE}" ]]; then
+        rm -f "${SERVICE_FILE}"
+        echo "✅ 删除服务单元 ${SERVICE_FILE}"
+    fi
+
+    systemctl daemon-reload
+
+    if [[ -f "${ALX_BIN}" ]]; then
+        rm -f "${ALX_BIN}"
+        echo "✅ 删除 ${ALX_BIN}"
+    fi
+
+    if [[ -f "${ALXWEB_PY}" ]]; then
+        rm -f "${ALXWEB_PY}"
+        echo "✅ 删除 ${ALXWEB_PY}"
+    fi
+
+    # ⚠️ 取消下面两行注释，才会卸载 mpv；系统其他程序可能依赖 mpv，谨慎开启
+    # echo "卸载 mpv ..."
+    # apt remove -y mpv && apt autoremove -y
+
+    echo "✅ 卸载完成。mpv、python3‑flask、python3 保留未删除，如需卸载请手动操作"
+    read -p "按回车返回主菜单..."
+}
+
+show_menu(){
+    clear
+    echo "================ ALXWEB 管理工具 ================"
+    echo " 1 安装"
+    echo " 2 启动"
+    echo " 3 停止"
+    echo " 4 重启"
+    echo " 5 卸载"
+    echo " 0 退出"
+    echo "================================================="
+    read -p "请输入选项 [0‑5]：" opt
+}
+
+# 主循环
+check_root
+while true; do
+    show_menu
+    case "$opt" in
+        1) install_func ;;
+        2) start_func ;;
+        3) stop_func ;;
+        4) restart_func ;;
+        5) remove_func ;;
+        0) echo "退出"; exit 0 ;;
+        *) echo "无效选项，请重新输入"; sleep 1 ;;
+    esac
+done
