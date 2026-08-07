@@ -5,7 +5,7 @@ SERVICE_NAME="alxw"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 ALX_BIN="/usr/bin/alx"
 ALXWEB_PY="/etc/alxweb.py"
-ALX_DOWNLOAD_URL="https://github.com/Xuepoo/agent-lx-music/releases/download/v0.3.4/alx-linux-aarch64"
+ALX_DOWNLOAD_URL="https://github.com/simon-lite/lxmusic-headless/raw/refs/heads/main/alx-linux-aarch64"
 ALXWEB_PY_URL="https://github.com/simon-lite/lxmusic-headless/raw/refs/heads/main/alxweb.py"
 
 function check_root {
