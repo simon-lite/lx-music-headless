@@ -4,8 +4,15 @@
 3. 建议使用USB声卡。如对音质有要求可使用烧友所谓的高品质小尾巴连接到音频播放器。
 4. 调试是在LXC环境的虚拟机里，直接映射宿主机声卡。
 5. 如果你没有安装声卡驱动，大概是不会出声的。安装过程大概/可能会安装USB声卡驱动。如果没有，你就自己安装一下吧。
+   Debian / Ubuntu
  ```bash
    sudo apt install alsa-utils usbutils
+ ```
+   Openwrt
+ ```bash
+   opkg update
+   opkg install kmod-sound-core kmod-usb-audio
+   opkg install alsa-utils
  ```
 6. 已分别在京东云亚瑟（openwrt下用LXC虚拟的debian和ubuntu）和魔百盒（armbian或openwrt下LXC虚拟的debian和ubuntu）测试通过。
 7. 京东云亚瑟可能需要自行编译固件才装的上声卡驱动。如需要固件请与我联系。
