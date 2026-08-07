@@ -1,5 +1,6 @@
 import subprocess
 import re
+import json
 from flask import Flask, render_template_string, request, jsonify
 
 app = Flask(__name__)
@@ -32,9 +33,7 @@ def play_from_queue_node(song_id):
     ordered_ids = [song['id'] for song in PLAY_QUEUE[start_idx:]]
     
     if ordered_ids:
-        # 先干净地停止当前音频并清空播放器位置
         subprocess.run(["alx", "stop"])
-        # 一次性传入多首歌曲，直接加载入临时队列顺序播放
         cmd = ["alx", "play"] + ordered_ids
         print(f"[Player] 执行原生切歌队列命令: {cmd}")
         subprocess.Popen(cmd)
@@ -45,7 +44,7 @@ def clean_ansi(text):
     return re.sub(r'(?:\x1B[@-_][0-?]*[ -/]*[@-~])', '', text)
 
 def get_alx_state():
-    """执行 alx state 并解析当前播放状态与进度"""
+    """执行 alx now --json 并解析 JSON 格式的当前播放状态与进度"""
     state_data = {
         "status": "Stopped ■",
         "title": "暂无播放曲目",
@@ -53,30 +52,37 @@ def get_alx_state():
         "progress_percent": 0
     }
     try:
-        res = subprocess.run(["alx", "state"], capture_output=True, text=True, timeout=1)
-        output = clean_ansi(res.stdout)
-        
-        status_match = re.search(r"Status:\s*(.+)", output)
-        if status_match:
-            state_data["status"] = status_match.group(1).strip()
+        res = subprocess.run(["alx", "now", "--json"], capture_output=True, text=True, timeout=1)
+        if res.returncode == 0 and res.stdout.strip():
+            data = json.loads(res.stdout)
             
-        song_match = re.search(r"Current Song:\s*(.+)", output)
-        if song_match:
-            state_data["title"] = song_match.group(1).strip()
-            
-        progress_match = re.search(r"Progress:\s*(\d+)s\s*/\s*(\d+)s", output)
-        if progress_match:
-            current_sec = int(progress_match.group(1))
-            total_sec = int(progress_match.group(2))
-            
-            c_min, c_sec = divmod(current_sec, 60)
-            t_min, t_sec = divmod(total_sec, 60)
-            state_data["progress_text"] = f"{c_min:02d}:{c_sec:02d} / {t_min:02d}:{t_sec:02d}"
-            
-            if total_sec > 0:
-                state_data["progress_percent"] = min(100, int((current_sec / total_sec) * 100))
+            raw_status = data.get("status", "stopped").lower()
+            if raw_status == "playing":
+                state_data["status"] = "Playing ▶"
+            elif raw_status == "paused":
+                state_data["status"] = "Paused ⏸"
+            else:
+                state_data["status"] = "Stopped ■"
+
+            if raw_status in ["playing", "paused"] and "song" in data and data["song"]:
+                song = data["song"]
+                name = song.get("name", "未知曲目")
+                singer = song.get("singer", "未知歌手")
+                source = song.get("source", "")
+                
+                state_data["title"] = f"{name} - {singer} [{source}]" if source else f"{name} - {singer}"
+                
+                current_sec = int(data.get("position", 0))
+                total_sec = int(data.get("duration", 0))
+                
+                c_min, c_sec = divmod(current_sec, 60)
+                t_min, t_sec = divmod(total_sec, 60)
+                state_data["progress_text"] = f"{c_min:02d}:{c_sec:02d} / {t_min:02d}:{t_sec:02d}"
+                
+                if total_sec > 0:
+                    state_data["progress_percent"] = min(100, int((current_sec / total_sec) * 100))
     except Exception as e:
-        print(f"[State Error] 解析状态失败: {e}")
+        print(f"[State Error] 解析 JSON 状态失败: {e}")
     return state_data
 
 BASE_HTML = """
@@ -133,7 +139,6 @@ BASE_HTML = """
         .action-btn.del-btn { color: #ff5b5b; border-left: 1px solid #333; font-size: 15px; }
         .action-btn:active { background: #444; }
         
-        /* 按钮样式强化 */
         .all-clear-btn { background: #ff5b5b; color: #fff; border: none; padding: 6px 12px; font-size: 12px; font-weight: bold; border-radius: 15px; cursor: pointer; transition: opacity 0.2s; }
         .all-clear-btn:active { opacity: 0.8; }
         
@@ -145,8 +150,11 @@ BASE_HTML = """
 
         .control-panel { display: flex; justify-content: space-between; flex-wrap: wrap; margin-top: 5px; }
         .ctrl-btn { width: 23%; padding: 12px 5px; font-size: 14px; background: #333; border: none; color: white; border-radius: 10px; cursor: pointer; font-weight: bold; }
-        .vol-btn { width: 48%; padding: 12px 5px; font-size: 14px; background: #282828; border: 1px solid #444; color: #1db954; border-radius: 10px; margin-top: 6px; cursor: pointer; font-weight: bold; }
-        .ctrl-btn:active, .vol-btn:active { background: #444; transform: scale(0.98); }
+        
+        /* 调整第二排按钮：3个按钮均分配约 31% 宽度 */
+        .vol-btn { width: 31%; padding: 12px 5px; font-size: 14px; background: #282828; border: 1px solid #444; color: #1db954; border-radius: 10px; margin-top: 6px; cursor: pointer; font-weight: bold; }
+        .stop-btn { width: 31%; padding: 12px 5px; font-size: 14px; background: #282828; border: 1px solid #ff5b5b; color: #ff5b5b; border-radius: 10px; margin-top: 6px; cursor: pointer; font-weight: bold; }
+        .ctrl-btn:active, .vol-btn:active, .stop-btn:active { background: #444; transform: scale(0.98); }
         
         .toast { display: none; position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); background: rgba(29, 185, 84, 0.9); color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 14px; z-index: 99999; }
         
@@ -157,8 +165,6 @@ BASE_HTML = """
         }
     </style>
 </head>
-"""
-BASE_HTML += """
 <body>
     <div class="top-sticky-panel">
         <div class="top-sticky-wrapper">
@@ -178,6 +184,7 @@ BASE_HTML += """
                 <button class="ctrl-btn" onclick="sendCmd('resume')">▶ 播放</button>
                 <button class="ctrl-btn" onclick="sendCmd('next')">⏭ 下一首</button>
                 <button class="vol-btn" onclick="sendCmd('volume -10')">🔉 音量 -</button>
+                <button class="stop-btn" onclick="quitPlayer()">⏹ 停止</button>
                 <button class="vol-btn" onclick="sendCmd('volume +10')">🔊 音量 +</button>
             </div>
         </div>
@@ -230,10 +237,30 @@ BASE_HTML += """
     <div id="toast" class="toast"></div>
 
     <script>
+        let isRefreshPaused = false; // 控制暂停轮询刷新的标志位
+
         document.addEventListener("DOMContentLoaded", function() {
             updateQueueView();
             setInterval(updateQueueView, 2000);
         });
+
+        function quitPlayer() {
+            isRefreshPaused = true; // 开启拦截标志位
+            
+            // 立即将顶部 alx now 状态面板归位重置
+            document.getElementById("player-song-title").innerText = "暂无播放曲目";
+            document.getElementById("player-status").innerText = "状态: Stopped ■";
+            document.getElementById("player-time").innerText = "00:00 / 00:00";
+            document.getElementById("player-progress-fill").style.width = "0%";
+            
+            showToast("⏹ 已关机，搜索或加入任何歌曲会自动开机");
+            sendCmd('quit');
+
+            // 保持关闭轮询 3 秒，防止后台延时返回覆盖状态
+            setTimeout(function() {
+                isRefreshPaused = false;
+            }, 3000);
+        }
 
         function promptAddSource() {
             var url = prompt("请输入音源文件地址 (URL):");
@@ -269,9 +296,12 @@ BASE_HTML += """
         }
 
         function updateQueueView() {
+            if (isRefreshPaused) return; // 处于 3 秒暂停状态时跳过向后端 alx now 的请求
             fetch('/get_queue')
                 .then(res => res.json())
-                .then(data => { handleUiRefresh(data); });
+                .then(data => {
+                    if (!isRefreshPaused) handleUiRefresh(data);
+                });
         }
 
         function handleUiRefresh(data) {
@@ -371,7 +401,6 @@ def index():
 
 @app.route('/add_source')
 def add_source():
-    """接收前端输入的音源 URL 并调用 alx source add 命令"""
     url = request.args.get('url', '').strip()
     if not url:
         return jsonify({"status": "error", "msg": "❌ 音源地址不能为空"})
@@ -486,7 +515,6 @@ def remove_from_queue():
 
 @app.route('/clear_queue')
 def clear_queue():
-    """清空播放队列并停止当前播放"""
     global PLAY_QUEUE, CURRENT_PLAYING_ID
     PLAY_QUEUE = []
     CURRENT_PLAYING_ID = None
@@ -527,8 +555,11 @@ def cmd():
     if c:
         cmd_parts = c.split()
         
-        # 切歌逻辑
-        if len(cmd_parts) >= 1 and cmd_parts[0] == "next" and PLAY_QUEUE:
+        if len(cmd_parts) >= 1 and cmd_parts[0] == "quit":
+            CURRENT_PLAYING_ID = None
+            args = ["alx", "quit"]
+        
+        elif len(cmd_parts) >= 1 and cmd_parts[0] == "next" and PLAY_QUEUE:
             for idx, song in enumerate(PLAY_QUEUE):
                 if song['id'] == CURRENT_PLAYING_ID and idx + 1 < len(PLAY_QUEUE):
                     play_from_queue_node(PLAY_QUEUE[idx + 1]['id'])
@@ -536,7 +567,7 @@ def cmd():
             subprocess.run(["alx", "next"])
             return "OK"
 
-        if len(cmd_parts) >= 1 and cmd_parts[0] == "prev" and PLAY_QUEUE:
+        elif len(cmd_parts) >= 1 and cmd_parts[0] == "prev" and PLAY_QUEUE:
             for idx, song in enumerate(PLAY_QUEUE):
                 if song['id'] == CURRENT_PLAYING_ID and idx - 1 >= 0:
                     play_from_queue_node(PLAY_QUEUE[idx - 1]['id'])
@@ -544,15 +575,13 @@ def cmd():
             subprocess.run(["alx", "prev"])
             return "OK"
 
-        # 1. 修正音量逻辑：负数参数增加 "--"
-        if len(cmd_parts) >= 2 and cmd_parts[0] == "volume":
+        elif len(cmd_parts) >= 2 and cmd_parts[0] == "volume":
             vol_val = cmd_parts[1]
             if vol_val.startswith("-"):
                 args = ["alx", "volume", "--", vol_val]
             else:
                 args = ["alx", "volume", vol_val]
 
-        # 2. 修正下载逻辑：缺少 "add" 子命令时自动插入
         elif len(cmd_parts) >= 2 and cmd_parts[0] == "download":
             if cmd_parts[1] != "add":
                 args = ["alx", "download", "add"] + cmd_parts[1:]
