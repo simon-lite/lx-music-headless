@@ -10,13 +10,4 @@ Armbian可用，如当前系统无法安装，可使用LXC虚拟机内建Debian 
    ```bash
    sudo apt install wget #通常都有，没有就装上。
    sudo wget https://raw.githubusercontent.com/simon-lite/lxmusic-headless/refs/heads/main/onekey && chmod +x onekey && ./onekey
-## 按需选择
- ================ ALXWEB 管理工具 ================
-  1 安装
-  2 启动
-  3 停止
-  4 重启
-  5 卸载
-  0 退出
- =================================================
-请输入选项 [0‑5]：
+ ```
