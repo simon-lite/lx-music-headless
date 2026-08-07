@@ -12,7 +12,7 @@ Armbian可用，如当前系统无法安装或无法使用，建议用LXC虚拟�
    sudo wget https://raw.githubusercontent.com/simon-lite/lxmusic-headless/refs/heads/main/onekey && chmod +x onekey && ./onekey
  ```
 ## 安装指令
-`` 
+``bash 
 ================ ALXWEB 管理工具 ================
  1 安装
  2 启动
@@ -22,5 +22,5 @@ Armbian可用，如当前系统无法安装或无法使用，建议用LXC虚拟�
  0 退出脚本
 =================================================
 请输入选项 [0——5]：
-``
+```
  
