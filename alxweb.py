@@ -91,7 +91,7 @@ BASE_HTML = """
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ALX 音乐遥控器</title>
+    <title>HiFi音乐遥控器</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #121212; color: #fff; text-align: center; padding: 15px; margin: 0; }
         
@@ -247,7 +247,7 @@ BASE_HTML = """
         function quitPlayer() {
             isRefreshPaused = true; // 开启拦截标志位
             
-            // 立即将顶部 alx now 状态面板归位重置
+            // 立即将顶部状态面板归位重置
             document.getElementById("player-song-title").innerText = "暂无播放曲目";
             document.getElementById("player-status").innerText = "状态: Stopped ■";
             document.getElementById("player-time").innerText = "00:00 / 00:00";
@@ -296,7 +296,7 @@ BASE_HTML = """
         }
 
         function updateQueueView() {
-            if (isRefreshPaused) return; // 处于 3 秒暂停状态时跳过向后端 alx now 的请求
+            if (isRefreshPaused) return; // 处于 3 秒暂停状态时跳过向后端的请求
             fetch('/get_queue')
                 .then(res => res.json())
                 .then(data => {
