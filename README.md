@@ -1,4 +1,4 @@
-在N1（或其他相似配置的盒子）上使用LX-Music——headless。
+在N1（或其他相似配置的盒子）上使用Lx-Music—headless。
 
 ## 安装注意 
 1. 推荐 Debian 12 或 Ubuntu LTS 24 
