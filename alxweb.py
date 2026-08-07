@@ -4,7 +4,7 @@ from flask import Flask, render_template_string, request, jsonify
 
 app = Flask(__name__)
 
-# 已修改：指定你希望歌曲下载到的 Armbian 外挂或本地文件夹绝对路径
+# 指定歌曲下载绝对路径
 DOWNLOAD_DIR = "/mnt/sda1/alxdl"
 
 # 全局变量
@@ -43,6 +43,7 @@ def play_from_queue_node(song_id):
 def clean_ansi(text):
     """去除终端输出中的 ANSI 颜色和样式控制代码"""
     return re.sub(r'(?:\x1B[@-_][0-?]*[ -/]*[@-~])', '', text)
+
 def get_alx_state():
     """执行 alx state 并解析当前播放状态与进度"""
     state_data = {
@@ -52,37 +53,32 @@ def get_alx_state():
         "progress_percent": 0
     }
     try:
-        # 执行获取状态命令
         res = subprocess.run(["alx", "state"], capture_output=True, text=True, timeout=1)
         output = clean_ansi(res.stdout)
         
-        # 解析播放状态
         status_match = re.search(r"Status:\s*(.+)", output)
         if status_match:
             state_data["status"] = status_match.group(1).strip()
             
-        # 解析当前歌曲
         song_match = re.search(r"Current Song:\s*(.+)", output)
         if song_match:
             state_data["title"] = song_match.group(1).strip()
             
-        # 解析进度 (例如 Progress: 185s / 219s)
         progress_match = re.search(r"Progress:\s*(\d+)s\s*/\s*(\d+)s", output)
         if progress_match:
             current_sec = int(progress_match.group(1))
             total_sec = int(progress_match.group(2))
             
-            # 格式化为分:秒展示
             c_min, c_sec = divmod(current_sec, 60)
             t_min, t_sec = divmod(total_sec, 60)
             state_data["progress_text"] = f"{c_min:02d}:{c_sec:02d} / {t_min:02d}:{t_sec:02d}"
             
-            # 计算百分比
             if total_sec > 0:
                 state_data["progress_percent"] = min(100, int((current_sec / total_sec) * 100))
     except Exception as e:
         print(f"[State Error] 解析状态失败: {e}")
     return state_data
+
 BASE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -90,10 +86,9 @@ BASE_HTML = """
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ALX 音乐遥控器</title>
-<style>
+    <style>
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #121212; color: #fff; text-align: center; padding: 15px; margin: 0; }
         
-        /* 1. 修正顶部留白：将 padding-top 从 290px 缩小至 190px */
         .container { max-width: 1000px; margin: 0 auto; padding-top: 190px; position: relative; z-index: 1; }
         
         /* 顶部锁定面板 */
@@ -107,11 +102,11 @@ BASE_HTML = """
         .progress-bar-bg { width: 100%; height: 6px; background: #333; border-radius: 3px; overflow: hidden; position: relative; margin-top: 2px; }
         .progress-bar-fill { width: 0%; height: 100%; background: #1db954; border-radius: 3px; transition: width 0.5s ease; }
         
-        /* 双栏布局与独立限高滚动控制 */
+        /* 双栏布局 */
         .main-layout { display: flex; justify-content: space-between; margin-top: 0; gap: 20px; text-align: left; }
         .column { flex: 1; background: #181818; padding: 15px; border-radius: 12px; border: 1px solid #282828; height: calc(100vh - 220px); max-height: 650px; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; }
         
-        /* 2. 锁定左右标题行：设置 sticky 定位与 flex-shrink: 0，确保表头不随歌曲列表滚动 */
+        /* 锁定左右标题行 */
         .column-header-box { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #282828; padding-bottom: 10px; margin-bottom: 10px; height: 38px; flex-shrink: 0; box-sizing: border-box; position: sticky; top: 0; background: #181818; z-index: 10; }
         .column-header-box h3 { margin: 0; color: #b3b3b3; font-size: 18px; }
         
@@ -138,8 +133,16 @@ BASE_HTML = """
         .action-btn.del-btn { color: #ff5b5b; border-left: 1px solid #333; font-size: 15px; }
         .action-btn:active { background: #444; }
         
-        .all-dl-btn { background: #00bfff; color: #fff; border: none; padding: 6px 12px; font-size: 12px; font-weight: bold; border-radius: 15px; cursor: pointer; }
+        /* 按钮样式强化 */
+        .all-clear-btn { background: #ff5b5b; color: #fff; border: none; padding: 6px 12px; font-size: 12px; font-weight: bold; border-radius: 15px; cursor: pointer; transition: opacity 0.2s; }
+        .all-clear-btn:active { opacity: 0.8; }
         
+        .all-dl-btn { background: #00bfff; color: #fff; border: none; padding: 6px 12px; font-size: 12px; font-weight: bold; border-radius: 15px; cursor: pointer; }
+        .all-dl-btn:active { opacity: 0.8; }
+
+        .source-btn { background: #282828; color: #1db954; border: 1px solid #1db954; border-radius: 6px; padding: 3px 8px; font-size: 12px; font-weight: bold; cursor: pointer; transition: all 0.2s ease; white-space: nowrap; }
+        .source-btn:hover { background: #1db954; color: #fff; }
+
         .control-panel { display: flex; justify-content: space-between; flex-wrap: wrap; margin-top: 5px; }
         .ctrl-btn { width: 23%; padding: 12px 5px; font-size: 14px; background: #333; border: none; color: white; border-radius: 10px; cursor: pointer; font-weight: bold; }
         .vol-btn { width: 48%; padding: 12px 5px; font-size: 14px; background: #282828; border: 1px solid #444; color: #1db954; border-radius: 10px; margin-top: 6px; cursor: pointer; font-weight: bold; }
@@ -147,27 +150,10 @@ BASE_HTML = """
         
         .toast { display: none; position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); background: rgba(29, 185, 84, 0.9); color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 14px; z-index: 99999; }
         
-        /* 移动端间距同步修正 */
         @media (max-width: 768px) {
             .container { padding-top: 210px; }
             .main-layout { flex-direction: column; }
             .column { height: 380px; max-height: 380px; margin-bottom: 15px; }
-        }
-        .source-btn {
-        background: #282828;
-        color: #1db954;
-        border: 1px solid #1db954;
-        border-radius: 6px;
-        padding: 3px 8px;
-        font-size: 12px;
-        font-weight: bold;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        white-space: nowrap;
-        }
-        .source-btn:hover {
-        background: #1db954;
-        color: #fff;
         }
     </style>
 </head>
@@ -232,7 +218,10 @@ BASE_HTML += """
             <div class="column">
                 <div class="column-header-box">
                     <h3>📅 播放队列</h3>
-                    <button class="all-dl-btn" onclick="downloadAllQueue()">全部下载</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="all-clear-btn" onclick="clearQueue()">全部清除</button>
+                        <button class="all-dl-btn" onclick="downloadAllQueue()">全部下载</button>
+                    </div>
                 </div>
                 <div id="play-queue-list"></div>
             </div>
@@ -245,6 +234,21 @@ BASE_HTML += """
             updateQueueView();
             setInterval(updateQueueView, 2000);
         });
+
+        function promptAddSource() {
+            var url = prompt("请输入音源文件地址 (URL):");
+            if (url && url.trim() !== "") {
+                showToast("⏳ 正在导入自定义音源...");
+                fetch('/add_source?url=' + encodeURIComponent(url.trim()))
+                    .then(res => res.json())
+                    .then(data => {
+                        showToast(data.msg);
+                    })
+                    .catch(err => {
+                        showToast("❌ 请求异常: " + err);
+                    });
+            }
+        }
 
         function addToQueue(id, title, artist) {
             fetch(`/add_to_queue?id=${id}&title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}`)
@@ -269,20 +273,7 @@ BASE_HTML += """
                 .then(res => res.json())
                 .then(data => { handleUiRefresh(data); });
         }
-        function promptAddSource() {
-    var url = prompt("请输入音源文件地址 (URL):");
-    if (url && url.trim() !== "") {
-        showToast("⏳ 正在导入自定义音源...");
-        fetch('/add_source?url=' + encodeURIComponent(url.trim()))
-            .then(res => res.json())
-            .then(data => {
-                showToast(data.msg);
-            })
-            .catch(err => {
-                showToast("❌ 请求异常: " + err);
-            });
-    }
-}
+
         function handleUiRefresh(data) {
             renderQueue(data.queue, data.current_id);
             if (data.state) {
@@ -326,6 +317,17 @@ BASE_HTML += """
                 .then(data => { handleUiRefresh(data); });
         }
 
+        function clearQueue() {
+            if (confirm("确定要清空播放队列吗？")) {
+                fetch('/clear_queue')
+                    .then(res => res.json())
+                    .then(data => {
+                        showToast("🗑️ 播放队列已清空");
+                        handleUiRefresh(data);
+                    });
+            }
+        }
+
         function downloadSong(id, title) {
             showToast("正在后台下载: " + title);
             fetch('/download_id?id=' + id)
@@ -362,9 +364,11 @@ BASE_HTML += """
 </body>
 </html>
 """
+
 @app.route('/')
 def index():
     return render_template_string(BASE_HTML, query="", songs=[], has_searched=False)
+
 @app.route('/add_source')
 def add_source():
     """接收前端输入的音源 URL 并调用 alx source add 命令"""
@@ -373,18 +377,17 @@ def add_source():
         return jsonify({"status": "error", "msg": "❌ 音源地址不能为空"})
     
     try:
-        # 执行 alx source add <URL>
         res = subprocess.run(["alx", "source", "add", url], capture_output=True, text=True, timeout=15)
         output = clean_ansi(res.stdout + res.stderr)
         
         if "successfully" in output.lower() or "✓" in output:
             return jsonify({"status": "ok", "msg": "✓ 自定义音源导入成功！"})
         else:
-            # 提取命令行输出的错误信息
             err_line = output.strip().split('\n')[-1] if output.strip() else "导入失败"
             return jsonify({"status": "error", "msg": f"❌ {err_line}"})
     except Exception as e:
         return jsonify({"status": "error", "msg": f"❌ 执行出错: {e}"})
+
 @app.route('/search')
 def search():
     global CURRENT_SEARCH_RESULTS
@@ -403,7 +406,7 @@ def search():
                 if len(parts) >= 8 and parts[1].isdigit():
                     song_data = {
                         "idx": parts[1],
-                        "id": parts[2],      # 顺利截获正确歌曲 ID
+                        "id": parts[2],
                         "title": parts[3],
                         "artist": parts[4],
                         "album": parts[5],
@@ -481,9 +484,21 @@ def remove_from_queue():
         "state": get_alx_state()
     })
 
+@app.route('/clear_queue')
+def clear_queue():
+    """清空播放队列并停止当前播放"""
+    global PLAY_QUEUE, CURRENT_PLAYING_ID
+    PLAY_QUEUE = []
+    CURRENT_PLAYING_ID = None
+    subprocess.run(["alx", "stop"])
+    return jsonify({
+        "queue": PLAY_QUEUE, 
+        "current_id": CURRENT_PLAYING_ID, 
+        "state": get_alx_state()
+    })
+
 @app.route('/download_id')
 def download_id():
-    """已修改：使用 alx config 覆盖下载根路径至外挂目录，并触发单曲下载"""
     song_id = request.args.get('id', '')
     if song_id:
         subprocess.run(["alx", "config", "set", "download.output_dir", DOWNLOAD_DIR])
@@ -495,7 +510,6 @@ def download_id():
 
 @app.route('/download_all')
 def download_all():
-    """已修改：批量覆盖并下载整个队列至外挂目录"""
     global PLAY_QUEUE
     if not PLAY_QUEUE:
         return "FAILED"
@@ -541,7 +555,6 @@ def cmd():
         # 2. 修正下载逻辑：缺少 "add" 子命令时自动插入
         elif len(cmd_parts) >= 2 and cmd_parts[0] == "download":
             if cmd_parts[1] != "add":
-                # 将 "download 057c9345" 自动修正为 ["alx", "download", "add", "057c9345"]
                 args = ["alx", "download", "add"] + cmd_parts[1:]
             else:
                 args = ["alx"] + cmd_parts
@@ -552,5 +565,6 @@ def cmd():
         print(f"[Web] 执行底层控制命令: {args}")
         subprocess.run(args)
     return "OK"
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8888)
