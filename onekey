@@ -157,10 +157,10 @@ show_menu(){
     echo "================ ALXWEB 管理工具 ================"
     echo " 1 安装"
     echo " 2 启动"
-    echo " 3 停止"
-    echo " 4 重启"
+    echo " 3 重启"
+    echo " 4 停止"
     echo " 5 卸载"
-    echo " 0 退出"
+    echo " 0 退出脚本"
     echo "================================================="
     read -p "请输入选项 [0——5]：" opt
 }
@@ -172,8 +172,8 @@ while true; do
     case "$opt" in
         1) install_func ;;
         2) start_func ;;
-        3) stop_func ;;
-        4) restart_func ;;
+        3) restart_func ;;
+        4) stop_func ;;
         5) remove_func ;;
         0) echo "退出"; exit 0 ;;
         *) echo "无效选项，请重新输入"; sleep 1 ;;
