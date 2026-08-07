@@ -365,7 +365,26 @@ BASE_HTML += """
 @app.route('/')
 def index():
     return render_template_string(BASE_HTML, query="", songs=[], has_searched=False)
-
+@app.route('/add_source')
+def add_source():
+    """接收前端输入的音源 URL 并调用 alx source add 命令"""
+    url = request.args.get('url', '').strip()
+    if not url:
+        return jsonify({"status": "error", "msg": "❌ 音源地址不能为空"})
+    
+    try:
+        # 执行 alx source add <URL>
+        res = subprocess.run(["alx", "source", "add", url], capture_output=True, text=True, timeout=15)
+        output = clean_ansi(res.stdout + res.stderr)
+        
+        if "successfully" in output.lower() or "✓" in output:
+            return jsonify({"status": "ok", "msg": "✓ 自定义音源导入成功！"})
+        else:
+            # 提取命令行输出的错误信息
+            err_line = output.strip().split('\n')[-1] if output.strip() else "导入失败"
+            return jsonify({"status": "error", "msg": f"❌ {err_line}"})
+    except Exception as e:
+        return jsonify({"status": "error", "msg": f"❌ 执行出错: {e}"})
 @app.route('/search')
 def search():
     global CURRENT_SEARCH_RESULTS
