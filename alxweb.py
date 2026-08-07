@@ -22,14 +22,12 @@ def play_from_queue_node(song_id):
     if not PLAY_QUEUE:
         return
     
-    # 找到当前歌曲在队列中的索引位置
     start_idx = 0
     for idx, song in enumerate(PLAY_QUEUE):
         if song['id'] == song_id:
             start_idx = idx
             break
             
-    # 获取当前歌曲及之后的所有歌曲 ID 组成有序播放列表
     ordered_ids = [song['id'] for song in PLAY_QUEUE[start_idx:]]
     
     if ordered_ids:
@@ -49,7 +47,9 @@ def get_alx_state():
         "status": "Stopped ■",
         "title": "暂无播放曲目",
         "progress_text": "00:00 / 00:00",
-        "progress_percent": 0
+        "progress_percent": 0,
+        "duration": 0,
+        "position": 0
     }
     try:
         res = subprocess.run(["alx", "now", "--json"], capture_output=True, text=True, timeout=1)
@@ -75,6 +75,9 @@ def get_alx_state():
                 current_sec = int(data.get("position", 0))
                 total_sec = int(data.get("duration", 0))
                 
+                state_data["duration"] = total_sec
+                state_data["position"] = current_sec
+
                 c_min, c_sec = divmod(current_sec, 60)
                 t_min, t_sec = divmod(total_sec, 60)
                 state_data["progress_text"] = f"{c_min:02d}:{c_sec:02d} / {t_min:02d}:{t_sec:02d}"
@@ -91,7 +94,7 @@ BASE_HTML = """
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HiFi音乐遥控器</title>
+    <title>HIFI音乐遥控器</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #121212; color: #fff; text-align: center; padding: 15px; margin: 0; }
         
@@ -105,14 +108,47 @@ BASE_HTML = """
         .status-meta { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #b3b3b3; }
         .status-title { font-size: 15px; font-weight: bold; color: #1db954; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         
-        .progress-bar-bg { width: 100%; height: 6px; background: #333; border-radius: 3px; overflow: hidden; position: relative; margin-top: 2px; }
-        .progress-bar-fill { width: 0%; height: 100%; background: #1db954; border-radius: 3px; transition: width 0.5s ease; }
-        
+        /* 交互式滑动进度条 */
+        .progress-bar-container { width: 100%; margin-top: 4px; display: flex; align-items: center; }
+        .progress-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: linear-gradient(to right, #1db954 0%, #333 0%);
+            outline: none;
+            cursor: pointer;
+            transition: background 0.1s ease;
+        }
+        .progress-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+            transition: transform 0.1s ease;
+        }
+        .progress-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.25);
+            background: #1db954;
+        }
+        .progress-slider::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            border: none;
+        }
+
         /* 双栏布局 */
         .main-layout { display: flex; justify-content: space-between; margin-top: 0; gap: 20px; text-align: left; }
         .column { flex: 1; background: #181818; padding: 15px; border-radius: 12px; border: 1px solid #282828; height: calc(100vh - 220px); max-height: 650px; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; }
         
-        /* 锁定左右标题行 */
         .column-header-box { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #282828; padding-bottom: 10px; margin-bottom: 10px; height: 38px; flex-shrink: 0; box-sizing: border-box; position: sticky; top: 0; background: #181818; z-index: 10; }
         .column-header-box h3 { margin: 0; color: #b3b3b3; font-size: 18px; }
         
@@ -150,8 +186,6 @@ BASE_HTML = """
 
         .control-panel { display: flex; justify-content: space-between; flex-wrap: wrap; margin-top: 5px; }
         .ctrl-btn { width: 23%; padding: 12px 5px; font-size: 14px; background: #333; border: none; color: white; border-radius: 10px; cursor: pointer; font-weight: bold; }
-        
-        /* 调整第二排按钮：3个按钮均分配约 31% 宽度 */
         .vol-btn { width: 31%; padding: 12px 5px; font-size: 14px; background: #282828; border: 1px solid #444; color: #1db954; border-radius: 10px; margin-top: 6px; cursor: pointer; font-weight: bold; }
         .stop-btn { width: 31%; padding: 12px 5px; font-size: 14px; background: #282828; border: 1px solid #ff5b5b; color: #ff5b5b; border-radius: 10px; margin-top: 6px; cursor: pointer; font-weight: bold; }
         .ctrl-btn:active, .vol-btn:active, .stop-btn:active { background: #444; transform: scale(0.98); }
@@ -174,8 +208,9 @@ BASE_HTML = """
                     <span id="player-status">状态: --</span>
                     <span id="player-time">00:00 / 00:00</span>
                 </div>
-                <div class="progress-bar-bg">
-                    <div class="progress-bar-fill" id="player-progress-fill"></div>
+                <div class="progress-bar-container">
+                    <input type="range" class="progress-slider" id="player-progress-range" min="0" max="100" value="0" step="0.1"
+                           oninput="onSeekInput(this.value)" onchange="onSeekChange(this.value)">
                 </div>
             </div>
             <div class="control-panel">
@@ -237,26 +272,70 @@ BASE_HTML = """
     <div id="toast" class="toast"></div>
 
     <script>
-        let isRefreshPaused = false; // 控制暂停轮询刷新的标志位
+        let isRefreshPaused = false; 
+        let isSeeking = false;        // 标记用户是否正处于拖拽 seek 状态
+        let currentDuration = 0;      // 记录当前歌曲总秒数
 
         document.addEventListener("DOMContentLoaded", function() {
             updateQueueView();
             setInterval(updateQueueView, 2000);
         });
 
-        function quitPlayer() {
-            isRefreshPaused = true; // 开启拦截标志位
+        // 拖拽过程中的实时预览
+        function onSeekInput(percent) {
+            isSeeking = true;
+            const rangeInput = document.getElementById("player-progress-range");
+            rangeInput.style.background = `linear-gradient(to right, #1db954 ${percent}%, #333 ${percent}%)`;
             
-            // 立即将顶部状态面板归位重置
+            if (currentDuration > 0) {
+                const seekSec = Math.floor((percent / 100) * currentDuration);
+                const curMin = Math.floor(seekSec / 60);
+                const curSec = seekSec % 60;
+                const totMin = Math.floor(currentDuration / 60);
+                const totSec = currentDuration % 60;
+                
+                const curStr = curMin + ":" + (curSec < 10 ? "0" : "") + curSec;
+                const totStr = totMin + ":" + (totSec < 10 ? "0" : "") + totSec;
+                
+                document.getElementById("player-time").innerText = `${curStr} / ${totStr}`;
+            }
+        }
+
+        // 拖拽松开后正式提交命令
+        function onSeekChange(percent) {
+            if (currentDuration <= 0) {
+                isSeeking = false;
+                return;
+            }
+            const seekSec = Math.floor((percent / 100) * currentDuration);
+            const curMin = Math.floor(seekSec / 60);
+            const curSec = seekSec % 60;
+            const timeStr = curMin + ":" + (curSec < 10 ? "0" : "") + curSec;
+            
+            showToast("⏩ 跳转至: " + timeStr);
+            sendCmd('seek ' + timeStr);
+            
+            // 延时 1.5 秒解锁轮询，避免跳转瞬间轮询覆盖进度条
+            setTimeout(function() {
+                isSeeking = false;
+            }, 1500);
+        }
+
+        function quitPlayer() {
+            isRefreshPaused = true;
+            
             document.getElementById("player-song-title").innerText = "暂无播放曲目";
             document.getElementById("player-status").innerText = "状态: Stopped ■";
             document.getElementById("player-time").innerText = "00:00 / 00:00";
-            document.getElementById("player-progress-fill").style.width = "0%";
             
-            showToast("⏹ 已关机，搜索或加入任何歌曲会自动开机");
+            const rangeInput = document.getElementById("player-progress-range");
+            rangeInput.value = 0;
+            rangeInput.style.background = `linear-gradient(to right, #1db954 0%, #333 0%)`;
+            currentDuration = 0;
+            
+            showToast("⏹ 播放关机。加入歌曲或点击播放列表内歌曲会自动恢复");
             sendCmd('quit');
 
-            // 保持关闭轮询 3 秒，防止后台延时返回覆盖状态
             setTimeout(function() {
                 isRefreshPaused = false;
             }, 3000);
@@ -296,7 +375,7 @@ BASE_HTML = """
         }
 
         function updateQueueView() {
-            if (isRefreshPaused) return; // 处于 3 秒暂停状态时跳过向后端的请求
+            if (isRefreshPaused) return;
             fetch('/get_queue')
                 .then(res => res.json())
                 .then(data => {
@@ -307,10 +386,17 @@ BASE_HTML = """
         function handleUiRefresh(data) {
             renderQueue(data.queue, data.current_id);
             if (data.state) {
+                currentDuration = data.state.duration || 0;
                 document.getElementById("player-song-title").innerText = data.state.title;
                 document.getElementById("player-status").innerText = "状态: " + data.state.status;
-                document.getElementById("player-time").innerText = data.state.progress_text;
-                document.getElementById("player-progress-fill").style.width = data.state.progress_percent + "%";
+                
+                if (!isSeeking) {
+                    document.getElementById("player-time").innerText = data.state.progress_text;
+                    const rangeInput = document.getElementById("player-progress-range");
+                    const percent = data.state.progress_percent || 0;
+                    rangeInput.value = percent;
+                    rangeInput.style.background = `linear-gradient(to right, #1db954 ${percent}%, #333 ${percent}%)`;
+                }
             }
         }
 
@@ -559,6 +645,9 @@ def cmd():
             CURRENT_PLAYING_ID = None
             args = ["alx", "quit"]
         
+        elif len(cmd_parts) >= 2 and cmd_parts[0] == "seek":
+            args = ["alx", "seek", cmd_parts[1]]
+
         elif len(cmd_parts) >= 1 and cmd_parts[0] == "next" and PLAY_QUEUE:
             for idx, song in enumerate(PLAY_QUEUE):
                 if song['id'] == CURRENT_PLAYING_ID and idx + 1 < len(PLAY_QUEUE):
