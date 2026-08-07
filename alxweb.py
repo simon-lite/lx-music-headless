@@ -153,6 +153,22 @@ BASE_HTML = """
             .main-layout { flex-direction: column; }
             .column { height: 380px; max-height: 380px; margin-bottom: 15px; }
         }
+        .source-btn {
+        background: #282828;
+        color: #1db954;
+        border: 1px solid #1db954;
+        border-radius: 6px;
+        padding: 3px 8px;
+        font-size: 12px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        }
+        .source-btn:hover {
+        background: #1db954;
+        color: #fff;
+        }
     </style>
 </head>
 """
@@ -185,7 +201,10 @@ BASE_HTML += """
         <div class="main-layout">
             <div class="column">
                 <div class="column-header-box">
-                    <h3>🔍 搜索结果</h3>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button class="source-btn" onclick="promptAddSource()" title="添加自定义音源">源</button>
+                        <h3>🔍 搜索结果</h3>
+                    </div>
                     <form action="/search" method="get" class="search-box-inline">
                         <input type="text" name="q" placeholder="歌名/歌手..." value="{{ query }}" required>
                         <button type="submit">搜索</button>
@@ -250,7 +269,20 @@ BASE_HTML += """
                 .then(res => res.json())
                 .then(data => { handleUiRefresh(data); });
         }
-
+        function promptAddSource() {
+    var url = prompt("请输入音源文件地址 (URL):");
+    if (url && url.trim() !== "") {
+        showToast("⏳ 正在导入自定义音源...");
+        fetch('/add_source?url=' + encodeURIComponent(url.trim()))
+            .then(res => res.json())
+            .then(data => {
+                showToast(data.msg);
+            })
+            .catch(err => {
+                showToast("❌ 请求异常: " + err);
+            });
+    }
+}
         function handleUiRefresh(data) {
             renderQueue(data.queue, data.current_id);
             if (data.state) {
