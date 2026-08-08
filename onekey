@@ -17,6 +17,7 @@ function check_root {
 
 function install_func {
     check_root
+echo "===== 更新软件数据 ====="
      apt update #-qq
     echo "===== 开始安装 alxweb 环境 ====="
     # 安装 alsa-base
