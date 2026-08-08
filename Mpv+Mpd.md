@@ -28,7 +28,7 @@ ctl.!default {
 }
  ```
 保存并退出（Ctrl+O 回车，Ctrl+X）。
-## 第二步：将 mpd.conf 恢复为最简默认既然系统全局默认设备已经配好了，MPD 只需要无脑输出给 default 即可，不需要写复杂的设备名。
+## 第二步：既然系统全局默认设备已经配好了，MPD 只需要无脑输出给 default 即可，不需要写复杂的设备名。
 打开 MPD 配置文件：
  ```bash
 nano /etc/mpd.conf
@@ -46,9 +46,9 @@ audio_output {
  ```bash
 systemctl restart mpd
  ```
-## 第三步：将 mpv.conf 恢复为最简默认同样，MPV 也不需要任何复杂的设备路径了。打开你的 MPV 配置文件：
+## 第三步：MPV 也不需要任何复杂的设备路径了。打开你的 MPV 配置文件：
  ```bash
-nano ~/.config/mpv/mpv.conf
+nano /etc/mpv/mpv.conf
  ```
 把里面的内容精简为：
  ```text
