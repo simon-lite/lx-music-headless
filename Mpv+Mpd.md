@@ -1,9 +1,9 @@
 ## 第一步：创建全局 ALSA 混音配置我们在系统层定义一个名为 default（默认）的设备，让它强制指向你的 USB 声卡并开启软件混音（dmix）。用 nano 创建或覆盖全局配置文件：'
-'''bash
+ ```bash
 nano /etc/asound.conf
-'''
+ ```
 清空里面的内容（如果有的话），粘贴以下标准 ALSA 全局混音配置：
-'''text
+ ```text
 pcm.!default {
     type plug
     slave.pcm "dmixer"
@@ -26,32 +26,32 @@ ctl.!default {
     type hw
     card 0
 }
-'''
+ ```
 保存并退出（Ctrl+O 回车，Ctrl+X）。
 ## 第二步：将 mpd.conf 恢复为最简默认既然系统全局默认设备已经配好了，MPD 只需要无脑输出给 default 即可，不需要写复杂的设备名。
 打开 MPD 配置文件：
-'''bash
+ ```bash
 nano /etc/mpd.conf
-'''
+ ```
 将 audio_output 修改为最干净的 ALSA 基础配置：
-'''text
+ ```text
 audio_output {
         type            "alsa"
         name            "USB Audio"
         device          "default"       # 关键：直接走刚才配好的 default 混音器
         mixer_type      "software"
 }
-''''
+ ```
 保存退出，并重启 MPD 服务：
-'''bash
+ ```bash
 systemctl restart mpd
-'''
+ ```
 ## 第三步：将 mpv.conf 恢复为最简默认同样，MPV 也不需要任何复杂的设备路径了。打开你的 MPV 配置文件：
-'''bash
+ ```bash
 nano ~/.config/mpv/mpv.conf
-''''
+ ```
 把里面的内容精简为：
-'''text
+ ```text
 ao=alsa
-'''
+ ```
 保存退出。
