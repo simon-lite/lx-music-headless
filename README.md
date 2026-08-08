@@ -41,4 +41,20 @@
 =================================================
 请输入选项 [0——5]：
 ```
- 
+ 配置全局 mpv 默认声卡（最推荐）由于 alx 会直接调用系统的 mpv，我们直接在系统全局层面上把 mpv 的默认输出锁死在你的 USB 声卡上。打开（或创建）系统全局的 mpv.conf 配置文件：
+```bash
+   mkdir -p /etc/mpv/
+   nano /etc/mpv/mpv.conf
+```
+请谨慎使用此类代码。将以下三行配置完整复制并粘贴进去：
+```text
+   ao=alsa
+   audio-device=alsa/plughw:CARD=Audio,DEV=0
+   audio-channels=stereo
+```
+请谨慎使用此类代码。保存并退出（Ctrl+O 回车，Ctrl+X）。彻底杀掉之前残留的后台 mpv 进程（这步很重要，因为 alx 的 mpv 是守护进程，不杀掉不会读取新配置）：
+```bash
+  alx quit
+  pkill -9 mpv
+```
+保存退出。之后重新放歌。
