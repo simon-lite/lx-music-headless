@@ -1,8 +1,14 @@
-### 第一步：创建全局 ALSA 混音配置我们在系统层定义一个名为 default（默认）的设备，让它强制指向你的 USB 声卡并开启软件混音（dmix）。用 nano 创建或覆盖全局配置文件：'
+系统使用其他音频播放软件，如MPD。可能会发生抢占声卡的情况，这时候有两个选择
+ ```taxt
+1, 继续让他们抢占，前台优先。自行把不用的进程kill掉;
+2, 开启混音模式，支持同时播放同时出声；
+ ```
+如选择混音模式请按一下指导操作：
+### 第一步：在系统层定义一个名为 default（默认）的设备，让它强制指向你的 USB 声卡并开启软件混音（dmix）
  ```bash
 nano /etc/asound.conf
  ```
-清空里面的内容（如果有的话），粘贴以下标准 ALSA 全局混音配置：
+清空里面的内容（如果有），粘贴以下 ALSA 全局混音配置：
  ```text
 pcm.!default {
     type plug
@@ -18,7 +24,7 @@ pcm.dmixer {
         period_time 0
         period_size 1024
         buffer_size 4096
-        rate 44100      # 锁定标准采样率，防止因格式不匹配报错
+        rate 48000      # 锁定标准采样率，防止因格式不匹配报错
     }
 }
 
@@ -28,7 +34,7 @@ ctl.!default {
 }
  ```
 保存并退出（Ctrl+O 回车，Ctrl+X）。
-### 第二步：既然系统全局默认设备已经配好了，MPD 只需要无脑输出给 default 即可，不需要写复杂的设备名。
+### 第二步：配置MPD无脑输出给默认设备，不需要写复杂的设备名。
 打开 MPD 配置文件：
  ```bash
 nano /etc/mpd.conf
@@ -46,7 +52,7 @@ audio_output {
  ```bash
 systemctl restart mpd
  ```
-### 第三步：MPV 也不需要任何复杂的设备路径了。打开你的 MPV 配置文件：
+### 第三步：同样地，MPV也不需要任何复杂的设备路径。打开你的 MPV 配置文件：
  ```bash
 nano /etc/mpv/mpv.conf
  ```
