@@ -101,7 +101,7 @@ function stop_func {
     alx quit
     set -e
     systemctl stop "${SERVICE_NAME}"
-    echo "已停止服务"
+    echo "已停止服务！"
     read -p "按回车返回主菜单..."
 }
 
